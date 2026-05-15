@@ -1,0 +1,152 @@
+.mmm-roborock {
+  min-width: 240px;
+}
+
+.mmm-roborock--compact {
+  min-width: 190px;
+}
+
+.mmm-roborock--multi {
+  min-width: 210px;
+}
+
+.mmm-roborock__device + .mmm-roborock__device {
+  margin-top: 8px;
+}
+
+.mmm-roborock__device-label {
+  margin-bottom: 2px;
+}
+
+.mmm-roborock__compact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.mmm-roborock__compact-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.mmm-roborock__compact-item--battery {
+  justify-content: flex-start;
+}
+
+.mmm-roborock__compact-item--activity {
+  justify-content: flex-end;
+}
+
+.mmm-roborock__compact-icon {
+  width: 18px;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.mmm-roborock__compact-item--battery .fa-bolt {
+  color: #67d86f;
+}
+
+.mmm-roborock__compact-value {
+  line-height: 1;
+}
+
+.mmm-roborock__header {
+  margin-bottom: 4px;
+}
+
+.mmm-roborock__alert {
+  margin-top: 6px;
+  color: #ff5b5b;
+}
+
+.mmm-roborock__state-block {
+  margin-bottom: 10px;
+}
+
+.mmm-roborock__state {
+  margin-top: 2px;
+}
+
+.mmm-roborock__battery-block {
+  margin-bottom: 10px;
+}
+
+.mmm-roborock__battery-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mmm-roborock__charge-icon {
+  color: #67d86f;
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.mmm-roborock__battery-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.mmm-roborock__battery-bar {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.mmm-roborock__battery-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.mmm-roborock__battery-text {
+  min-width: 40px;
+  text-align: right;
+}
+
+.mmm-roborock__details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mmm-roborock__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mmm-roborock__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.8;
+}
+
+.mmm-roborock__row-icon {
+  width: 12px;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.mmm-roborock__value {
+  text-align: right;
+}
+
+.mmm-roborock__raw {
+  margin-top: 10px;
+  max-width: 320px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -1,0 +1,1 @@
+python-roborock>=5.7.0

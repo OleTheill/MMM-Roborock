@@ -1,0 +1,7 @@
+{
+  "name": "mmm-roborock",
+  "version": "0.1.0",
+  "description": "MagicMirror module for showing Roborock device status",
+  "main": "MMM-Roborock.js",
+  "license": "MIT"
+}
