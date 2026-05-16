@@ -24,6 +24,14 @@ The module was built for a mixed Roborock setup and supports both:
 
 ## Screens and Modes
 
+### Full mode
+
+![MMM-Roborock full mode showing battery, mower progress, mowing height, vacuum status, and a mower maintenance alert](docs/screenshots/full-mode.png)
+
+### Compact mode
+
+![MMM-Roborock compact mode showing Rocky and Ricky with battery, activity status, and a mower maintenance alert](docs/screenshots/compact-mode.png)
+
 `mode` controls how much the module shows:
 
 | Mode | Behavior |

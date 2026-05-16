@@ -348,6 +348,12 @@ Module.register("MMM-Roborock", {
   },
 
   getMaintenanceAlertText(data) {
+    const mowerMaintenance = data.status?.maintenance?.needsMaintenance || [];
+    if (mowerMaintenance.length > 0) {
+      const items = mowerMaintenance.map((item) => this.getMowerMaintenanceLabel(item.typeName || item.type)).join(", ");
+      return this.translateText("MAINTENANCE_CLEAN", { items });
+    }
+
     const rawStatus = data.device?.raw?.device_status || {};
     const schema = data.product?.raw?.schema || [];
     const expired = [];
@@ -379,6 +385,18 @@ Module.register("MMM-Roborock", {
     };
 
     return this.translateText(mapping[code] || code);
+  },
+
+  getMowerMaintenanceLabel(typeName) {
+    const mapping = {
+      CAMERA_CLEANING: "CAMERA_CLEANING",
+      CHASSIS_CLEANING: "CHASSIS_CLEANING",
+      CUTTING: "CUTTING_DISC",
+      EDGING: "EDGING_CUTTER",
+      BATTERY: "BATTERY"
+    };
+
+    return this.translateText(mapping[typeName] || String(typeName || "UNKNOWN"));
   },
 
   addAlertLine(container, message) {

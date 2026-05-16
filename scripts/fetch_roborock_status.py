@@ -16,6 +16,28 @@ from typing import Any
 from roborock.devices.cache import InMemoryCache
 from roborock.devices.device_manager import create_device_manager
 from roborock.devices.file_cache import load_value
+from roborock.exceptions import RoborockException
+from roborock.protocols.v1_protocol import decode_rpc_response
+
+
+REMOTE_MSG_TYPE_REQUEST_MAINTENANCE_STATUS = 114
+
+MAINTENANCE_TYPES = {
+    0: "UNKNOWN",
+    1: "CAMERA_CLEANING",
+    2: "CHASSIS_CLEANING",
+    3: "CUTTING",
+    4: "EDGING",
+    5: "BATTERY",
+}
+
+MAINTENANCE_STATUS_RESPONSE_FIELDS = {
+    1: "type",
+    2: "used_time",
+    3: "threshold",
+    4: "needs_maintenance",
+    5: "battery_degradation",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,6 +65,99 @@ def normalize(value: Any) -> Any:
     if isinstance(value, (list, tuple, set)):
         return [normalize(v) for v in value]
     return value
+
+
+def decode_varint(data: bytes, offset: int = 0) -> tuple[int, int]:
+    shift = 0
+    value = 0
+    while offset < len(data):
+        byte = data[offset]
+        offset += 1
+        value |= (byte & 0x7F) << shift
+        if not byte & 0x80:
+            return value, offset
+        shift += 7
+    raise ValueError("Truncated protobuf varint")
+
+
+def get_length_fields(data: bytes, field_number: int) -> list[bytes]:
+    values = []
+    offset = 0
+    while offset < len(data):
+        tag, offset = decode_varint(data, offset)
+        current_field = tag >> 3
+        wire_type = tag & 0x07
+
+        if wire_type == 0:
+            _, offset = decode_varint(data, offset)
+        elif wire_type == 1:
+            offset += 8
+        elif wire_type == 2:
+            length, offset = decode_varint(data, offset)
+            value = data[offset : offset + length]
+            offset += length
+            if current_field == field_number:
+                values.append(value)
+        elif wire_type == 5:
+            offset += 4
+        else:
+            raise ValueError(f"Unsupported protobuf wire type {wire_type}")
+    return values
+
+
+def decode_status_message(data: bytes) -> dict[str, Any]:
+    status: dict[str, Any] = {}
+    offset = 0
+    while offset < len(data):
+        tag, offset = decode_varint(data, offset)
+        field_number = tag >> 3
+        wire_type = tag & 0x07
+        name = MAINTENANCE_STATUS_RESPONSE_FIELDS.get(field_number, f"field_{field_number}")
+
+        if wire_type == 0:
+            value, offset = decode_varint(data, offset)
+            if name == "type":
+                status[name] = value
+                status["typeName"] = MAINTENANCE_TYPES.get(value, f"UNKNOWN_{value}")
+            elif name in {"needs_maintenance", "battery_degradation"}:
+                status[name] = bool(value)
+            else:
+                status[name] = value
+                if name in {"used_time", "threshold"}:
+                    status[f"{name}_hours"] = round(value / 3600, 2)
+        elif wire_type == 1:
+            offset += 8
+        elif wire_type == 2:
+            length, offset = decode_varint(data, offset)
+            offset += length
+        elif wire_type == 5:
+            offset += 4
+        else:
+            raise ValueError(f"Unsupported protobuf wire type {wire_type}")
+    return status
+
+
+def decode_mower_maintenance_payload(payload: bytes | None) -> list[dict[str, Any]]:
+    if not payload or not payload.startswith(b"PB"):
+        return []
+
+    data = payload[2:]
+    statuses = []
+    for wrapper in get_length_fields(data, 5):
+        for maintenance_response in get_length_fields(wrapper, 94):
+            for status_message in get_length_fields(maintenance_response, 1):
+                statuses.append(decode_status_message(status_message))
+    return statuses
+
+
+def build_maintenance_request_object(maintenance_type: int = 0) -> dict[str, Any]:
+    return {
+        "id": int(datetime.now(timezone.utc).timestamp() * 1000),
+        "type": REMOTE_MSG_TYPE_REQUEST_MAINTENANCE_STATUS,
+        "maintenance_status_request": {
+            "type": MAINTENANCE_TYPES[maintenance_type],
+        },
+    }
 
 
 def lower_or_none(value: Any) -> str | None:
@@ -203,6 +318,55 @@ def build_mower_status(device: Any) -> dict[str, Any]:
     }
 
 
+async def fetch_mower_maintenance(device: Any) -> dict[str, Any] | None:
+    if not device.v1_properties or not device.v1_properties.command:
+        return None
+
+    mqtt_channel = getattr(device._channel, "_mqtt_channel", None)
+    if mqtt_channel is None:
+        return None
+
+    statuses: list[dict[str, Any]] = []
+
+    def capture(message: Any) -> None:
+        try:
+            decoded = decode_rpc_response(message)
+        except RoborockException:
+            decoded = None
+
+        if decoded is not None:
+            return
+
+        statuses.extend(decode_mower_maintenance_payload(getattr(message, "payload", None)))
+
+    unsub = await mqtt_channel.subscribe(capture)
+    original_rpc_channel = device.v1_properties.command._rpc_channel
+    try:
+        device.v1_properties.command._rpc_channel = device._channel.mqtt_rpc_channel
+        try:
+            await asyncio.wait_for(
+                device.v1_properties.command.send("remote_pb", params=build_maintenance_request_object(0)),
+                timeout=12,
+            )
+        except Exception as err:  # noqa: BLE001
+            # The current python-roborock V1 decoder times out because the mower
+            # answers with a PB payload. The capture callback above still receives
+            # and decodes that PB response.
+            debug(f"mower maintenance command ended without V1 response: {type(err).__name__}: {err}")
+        await asyncio.sleep(1)
+    finally:
+        device.v1_properties.command._rpc_channel = original_rpc_channel
+        unsub()
+
+    if not statuses:
+        return None
+
+    return {
+        "statuses": statuses,
+        "needsMaintenance": [status for status in statuses if status.get("needs_maintenance")],
+    }
+
+
 def build_schema_status(device: Any) -> dict[str, Any]:
     values, schema_map = get_schema_values(device)
     error_code = values.get("error_code")
@@ -255,6 +419,12 @@ async def main() -> int:
 
         if category and "mower" in category:
             status_payload = build_mower_status(device)
+            try:
+                maintenance = await fetch_mower_maintenance(device)
+                if maintenance:
+                    status_payload["maintenance"] = maintenance
+            except Exception as err:  # noqa: BLE001
+                status_payload["maintenanceError"] = str(err)
         elif device.v1_properties is not None:
             try:
                 await asyncio.wait_for(device.v1_properties.status.refresh(), timeout=15)
